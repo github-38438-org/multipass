@@ -556,10 +556,10 @@ mp::Daemon::Daemon(std::unique_ptr<const DaemonConfig> the_config)
     connect_rpc(daemon_rpc, *this);
     std::vector<std::string> invalid_specs;
     bool mac_addr_missing{false};
-    for (auto const& entry : vm_instance_specs)
+    for (auto& entry : vm_instance_specs)
     {
         const auto& name = entry.first;
-        const auto& spec = entry.second;
+        auto& spec = entry.second;
 
         if (!config->vault->has_record_for(name))
         {
@@ -593,6 +593,13 @@ mp::Daemon::Daemon(std::unique_ptr<const DaemonConfig> the_config)
             mpl::log(mpl::Level::error, category, fmt::format("Removing instance {}: {}", name, e.what()));
             invalid_specs.push_back(name);
             config->vault->remove(name);
+        }
+
+        // FIXME: somehow we're writing contradictory state to disk.
+        if (spec.deleted && spec.state != VirtualMachine::State::stopped)
+        {
+            mpl::log(mpl::Level::debug, category, fmt::format("{} is deleted but has state", name, static_cast<int>(spec.state)));
+            spec.state = VirtualMachine::State::stopped;
         }
 
         if (spec.state == VirtualMachine::State::running && vm_instances[name]->state != VirtualMachine::State::running)
@@ -1757,7 +1764,7 @@ void mp::Daemon::persist_instances()
     mp::write_json(instance_records_json, data_dir.filePath(instance_db_name));
 }
 
-void mp::Daemon::start_mount(VirtualMachine *vm, const std::string& name, const std::string& source_path,
+void mp::Daemon::start_mount(VirtualMachine* vm, const std::string& name, const std::string& source_path,
                              const std::string& target_path, const std::unordered_map<int, int>& gid_map,
                              const std::unordered_map<int, int>& uid_map)
 {
@@ -2044,7 +2051,7 @@ grpc::Status mp::Daemon::cmd_vms(const std::vector<std::string>& tgts, std::func
     return grpc::Status::OK;
 }
 
-void mp::Daemon::install_sshfs(VirtualMachine *vm, const std::string& name)
+void mp::Daemon::install_sshfs(VirtualMachine* vm, const std::string& name)
 {
     auto& key_provider = *config->ssh_key_provider;
 
